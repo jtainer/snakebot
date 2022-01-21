@@ -1,3 +1,9 @@
+// 
+// Simple implementation of genetic algorithm to train a neural network to play the game snake
+// 
+// 2021, Jonathan Tainer
+// 
+
 #include <stdio.h>
 #include <time.h>
 #include "snake.h"
