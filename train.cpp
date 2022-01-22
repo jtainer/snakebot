@@ -6,147 +6,160 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <string.h>
 #include "snake.h"
 #include "cudanet.h"
 
-#define LAYER_COUNT 4
-#define NODES_PER_LAYER 64
+#define LAYER_COUNT 8
+#define NODES_PER_LAYER 128
 
 #define EPOCHS 1000
-#define POPULATION 1000
-#define INITIAL_POOL 10000
+#define POPULATION 500
 
 #define NET_FILENAME "net.bin"
 
-#define DECISION_THRESHOLD 0.5
+#define DECISION_THRESHOLD 0.5f
+#define SURVIVAL_THRESHOLD 0.5f
+
+void Setup();
+void Finish();
+float Eval(Network);
+void EvalPopulation();
+void CullPopulation();
+
+Network sysNet[POPULATION];
+Network tmpNet[POPULATION];
+Network devNet;
+float score[POPULATION];
 
 float maxScore = 1.f;
+float meanScore = 1.f;
 
 int main() {
 
-	// Parent for each generation
-	Network sysParent = createNetwork(STATE_BUF_SIZE, 4, LAYER_COUNT, NODES_PER_LAYER);
-	randomizeNetwork(sysParent);
+	Setup();
 	
-	// Current child network which is being tested
-	Network sysTest = copyNetwork(sysParent, SYSTEM_MEM);
-
-	// Copy of the current best network at any point within a generation
-	Network sysBest = copyNetwork(sysParent, SYSTEM_MEM);
-	
-	// Allocate video memory for test network
-	Network devTest = copyNetwork(sysParent, DEVICE_MEM);
-
-
-	printf("NETWORK SETUP COMPLETE\n");
-
-	// Setup simulation
-	InitSim();
-
-	printf("SIMULATION SETUP COMPLETE\n");
-
-	// Test a random population and select the best individual as the evolutionary starting point
-	for (int n = 0; n < INITIAL_POOL; n++) {
-		
-		randomizeNetwork(sysTest);
-		
-		copyNetworkData(&devTest, &sysTest, SYS_TO_DEV);
-		
-		while (Alive()) {
-
-			// Indices 0 and 1 correspond to left and right controls
-			// Indices 2 and 3 correspond to up and down controls
-			float networkOutput[4];
-
-			forwardPass(devTest.layer, devTest.numOfLayers, GameStateVec(), &networkOutput[0]);
-
-			int x = 0;
-			int y = 0;
-
-			if (networkOutput[0] >= DECISION_THRESHOLD)
-				x += 1;
-			if (networkOutput[1] >= DECISION_THRESHOLD)
-				x -= 1;
-			if (networkOutput[2] >= DECISION_THRESHOLD)
-				y += 1;
-			if (networkOutput[3] >= DECISION_THRESHOLD)
-				y -= 1;
-				
-			// Compute the next game state using the result from the neural network
-			Input(x, y);	
-		}
-		
-		if (Score() > maxScore) {
-			maxScore = Score();
-			copyNetworkData(&sysParent, &sysTest, SYS_TO_SYS);
-		}
-		
-		printf("INDIV: %4d | SCORE: %.0f\n", n, Score());
-		
-		ResetSim();
-	}
-	
-	// Run simulation
 	for (int epoch = 0; epoch < EPOCHS; epoch++) {
-		
-		// Reset high score
-		maxScore = 1.0;
-		
-		for (int n = 0; n < POPULATION; n++) {
-			
-			// Start with a clone of the parent network
-			copyNetworkData(&sysTest, &sysParent, SYS_TO_SYS);
+		EvalPopulation();
+		CullPopulation();
+		printf("Epoch: %3d  |  Avg. Score: %3.5f\n", epoch, meanScore);
+	}
+	
+	Finish();
+}
 
-			// Mutate the child network
-			mutateNetwork(sysTest, 0.1, 0.1);
 
-			// Copy the mutated child to video memory
-			copyNetworkData(&devTest, &sysTest, SYS_TO_DEV);
+void Setup() {
+	InitSim();
+	
+	for (int n = 0; n < POPULATION; n++) {
+		sysNet[n] = createNetwork(STATE_BUF_SIZE, 4, LAYER_COUNT, NODES_PER_LAYER);
+		randomizeNetwork(sysNet[n]);
+	}
+	
+	devNet = copyNetwork(sysNet[0], DEVICE_MEM); 
+}
 
-			// Run simulation using the current child network
-			while (Alive()) {
-
-				// Indices 0 and 1 correspond to left and right controls
-				// Indices 2 and 3 correspond to up and down controls
-				float networkOutput[4];
-
-				forwardPass(devTest.layer, devTest.numOfLayers, GameStateVec(), &networkOutput[0]);
-
-				int x = 0;
-				int y = 0;
-
-				if (networkOutput[0] >= DECISION_THRESHOLD)
-					x += 1;
-				if (networkOutput[1] >= DECISION_THRESHOLD)
-					x -= 1;
-				if (networkOutput[2] >= DECISION_THRESHOLD)
-					y += 1;
-				if (networkOutput[3] >= DECISION_THRESHOLD)
-					y -= 1;
-				
-				// Compute the next game state using the result from the neural network
-				Input(x, y);
-
-//				printf("%d, %d\n", x, y);
-			}
-
-			// Keep track of the highest-scoring network within the current generation
-			if (Score() > maxScore) {
-				maxScore = Score();
-				copyNetworkData(&sysBest, &sysTest, SYS_TO_SYS);
-			}
-			
-			printf("EPOCH: %2d | INDIV: %2d | SCORE: %.0f\n", epoch, n, Score());
-			ResetSim();
-		}
-		
-		// Use the best performing network from the last generation as the parent of the next generation
-		copyNetworkData(&sysParent, &sysBest, SYS_TO_SYS);
+void Finish() {
+	for (int n = 0; n < POPULATION; n++) {
+		deleteNetwork(&sysNet[n]);
 	}
 
-	deleteNetwork(&sysParent);
-	deleteNetwork(&sysTest);
-	deleteNetwork(&sysBest);
-	cudaDeleteNetwork(&devTest);
-	
+	cudaDeleteNetwork(&devNet);
 }
+
+float Eval(Network net) {
+	ResetSim();
+
+	copyNetworkData(&devNet, &net, SYS_TO_DEV);
+
+
+	while (Alive()) {
+		// Indices 0 and 1 correspond to left and right controls
+		// Indices 2 and 3 correspond to up and down controls
+		float networkOutput[4];
+
+		forwardPass(devNet.layer, devNet.numOfLayers, GameStateVec(), &networkOutput[0]);
+
+		int x = 0;
+		int y = 0;
+
+		if (networkOutput[0] >= DECISION_THRESHOLD)
+			x += 1;
+		if (networkOutput[1] >= DECISION_THRESHOLD)
+			x -= 1;
+		if (networkOutput[2] >= DECISION_THRESHOLD)
+			y += 1;
+		if (networkOutput[3] >= DECISION_THRESHOLD)
+			y -= 1;
+				
+		// Compute the next game state using the result from the neural network
+		Input(x, y);
+	}
+	
+	return Score();
+}
+
+void EvalPopulation() {
+
+	float cumulativeScore = 0.f;
+
+	for (int n = 0; n < POPULATION; n++) {
+		score[n] = Eval(sysNet[n]);
+		
+		cumulativeScore += score[n];
+	}
+	
+	meanScore = cumulativeScore / POPULATION;
+}
+
+void CullPopulation() {
+
+	int numAlive = 0;
+	int numDead = 0;
+	
+	for (int n = 0; n < POPULATION; n++) {
+		
+		// Put surviving networks at the beginning of the temp. array
+		if (score[n] > meanScore) {
+			tmpNet[numAlive] = sysNet[n];
+			numAlive++;
+		}
+		
+		// Put dead networks at the end of the array
+		else {
+			numDead++;
+			tmpNet[POPULATION - numDead] = sysNet[n];
+		}
+	}
+	
+	// Copy temp. array back to original array
+	memcpy(&sysNet[0], &tmpNet[0], POPULATION * sizeof(Network));
+	
+	// Replace each dead network with a mutated version of a surviving network
+	for (int n = 0; n < numDead; n++) {
+		copyNetworkData(&sysNet[numAlive + n], &sysNet[n % numAlive], SYS_TO_SYS);
+		mutateNetwork(sysNet[numAlive + n], 0.1, 0.1);
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
