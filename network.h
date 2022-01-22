@@ -9,9 +9,9 @@
 
 typedef struct Layer {
 
-	float* weightMatrix;
-	float* outputVector;
-	float* delta;
+	float* weightMatrix = NULL;
+	float* outputVector = NULL;
+	float* delta = NULL;
 	int numOfNodes;
 	int weightsPerNode;
 
@@ -25,7 +25,7 @@ typedef struct Layer {
 
 typedef struct Network {
 
-	Layer* layer;
+	Layer* layer = NULL;
 	int numOfLayers;
 
 } Network;

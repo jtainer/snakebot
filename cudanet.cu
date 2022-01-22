@@ -16,6 +16,9 @@ void initLayer(Layer* sysLayer, int numOfInputs, int numOfNodes) {
 	// Allocate memory for weight matrix
 	sysLayer->weightMatrix = (float*)malloc(numOfInputs * numOfNodes * sizeof(float));
 
+	if (sysLayer->weightMatrix == NULL)
+		printf("malloc failed in initLayer\n");
+
 //	// Initialize weight matrix with random values between -1.f and 1.f
 //	float multiplier = 2.f / RAND_MAX;
 //	for (int i = 0; i < numOfInputs * numOfNodes; i++)
@@ -24,11 +27,17 @@ void initLayer(Layer* sysLayer, int numOfInputs, int numOfNodes) {
 	// Allocate memory for output vector
 	sysLayer->outputVector = (float*)malloc((numOfNodes + 1) * sizeof(float));
 	
+	if (sysLayer->outputVector == NULL)
+		printf("malloc failed in initLayer\n");
+
 	// Initialize the bias in the output vector to 1.f
 	sysLayer->outputVector[numOfNodes] = 1.f; /* bias input */
 
 	// Allocate memory for deltas
 	sysLayer->delta = (float*)malloc(sizeof(float) * numOfNodes);
+
+	if (sysLayer->delta == NULL)
+		printf("malloc failed in initLayer\n");
 
 	// Note the weight and node counts for this layer
 	sysLayer->numOfNodes = numOfNodes;
@@ -196,7 +205,10 @@ Network createNetwork(int numOfInputs, int numOfOutputs, int numOfLayers, int no
 	
 	// Allocate enough memory for all layers of the neural network
 	net.layer = (Layer*)malloc(numOfLayers * sizeof(Layer));
-	
+
+	if (net.layer == NULL)
+		printf("malloc failed in createNetwork\n");
+
 	// Construct input layer
 	initLayer(&net.layer[0], numOfInputs, nodesPerLayer);
 	

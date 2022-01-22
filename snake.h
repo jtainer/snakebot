@@ -5,7 +5,7 @@
 //
 
 #ifndef STATE_BUF_SIZE
-#define STATE_BUF_SIZE 1024
+#define STATE_BUF_SIZE 32
 #endif
 
 void InitSim();

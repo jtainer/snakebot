@@ -10,8 +10,8 @@
 #include "snake.h"
 #include "cudanet.h"
 
-#define LAYER_COUNT 8
-#define NODES_PER_LAYER 128
+#define LAYER_COUNT 4
+#define NODES_PER_LAYER 32
 
 #define EPOCHS 1000
 #define POPULATION 500
@@ -44,7 +44,9 @@ int main() {
 		CullPopulation();
 		printf("Epoch: %3d  |  Avg. Score: %3.5f\n", epoch, meanScore);
 	}
-	
+
+	saveNetwork(sysNet[0], NET_FILENAME);
+
 	Finish();
 }
 

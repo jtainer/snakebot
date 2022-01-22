@@ -17,7 +17,7 @@
 #define TARGET_FPS 60
 #define FRAMES_PER_STATE 10
 
-#define MAX_TURNS 1000
+#define MAX_TURNS 2000
 
 #define ROWS 16
 #define COLS 16
@@ -225,7 +225,7 @@ int Alive() {
 
 float* GameStateVec() {
 	
-	// Reset entire vector to 0.0
+/*	// Reset entire vector to 0.0
 	for (int i = 0; i < 1024; i++) {
 		state[i] = 0.f;	
 	}
@@ -243,10 +243,29 @@ float* GameStateVec() {
 	// Third 256 floats are 1.0 if it contains the tail of the snake and 0.0 otherwise
 	index = (seg[length - 1].y * COLS) + seg[length - 1].x + 512;
 	state[index] = 1.f;
+
 	
 	// Fourth 256 floats are 1.0 if it contains the apple and 0.0 otherwise
 	index = (apple.y * COLS) + apple.x + 768;
 	state[index] = 1.f;
+*/
+	// Reset entire vector to 0.0
+	for (unsigned int i = 0; i < STATE_BUF_SIZE; i++)
+		state[i] = 0.f;
+
+	for (unsigned int i = 0; i < COLS; i++) {
+		Segment test = { i, seg[0].y, 1 };
+		if (test.x == apple.x && test.y == apple.y)
+			state[i] = 1.f;
+	}
+
+	for (unsigned int i = 0; i < ROWS; i++) {
+		Segment test = { seg[0].x, i, 1};
+		if (test.x == apple.x && test.y == apple.y)
+			state[COLS + i] = 1.f;
+	}
+
+
 	
 	return &state[0];
 	
